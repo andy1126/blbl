@@ -109,7 +109,7 @@ private class VodPlayerTouchHost(
     override val isBottomCardPanelVisible: Boolean
         get() = playerActivity.isBottomCardPanelVisible()
     override val isCommentImageViewerVisible: Boolean
-        get() = binding.commentImageViewer.visibility == View.VISIBLE
+        get() = playerActivity.isCommentImageViewerVisible()
     override val seekDelegate: PlayerTouchSeekDelegate
         get() = this
     override val boostDelegate: PlayerTouchBoostDelegate

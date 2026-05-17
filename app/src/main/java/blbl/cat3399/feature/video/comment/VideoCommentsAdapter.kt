@@ -1,4 +1,4 @@
-package blbl.cat3399.feature.player
+package blbl.cat3399.feature.video.comment
 
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -18,40 +18,12 @@ import blbl.cat3399.core.ui.cloneInUserScale
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.databinding.ItemPlayerCommentBinding
 
-class PlayerCommentsAdapter(
+internal class VideoCommentsAdapter(
     private val expandedRpids: MutableSet<Long>,
-    private val onClick: (Item) -> Unit,
-    private val onLongClick: (Item) -> Boolean = { false },
-) : RecyclerView.Adapter<PlayerCommentsAdapter.Vh>() {
-    data class ReplyPreview(
-        val userName: String,
-        val message: String,
-        val emotes: Map<String, String> = emptyMap(),
-    )
-
-    data class Item(
-        val key: String,
-        val rpid: Long,
-        val oid: Long,
-        val type: Int,
-        val mid: Long,
-        val userName: String,
-        val avatarUrl: String?,
-        val message: String,
-        val emotes: Map<String, String> = emptyMap(),
-        val pictures: List<String> = emptyList(),
-        val noteCvid: Long = 0L,
-        val ctimeSec: Long,
-        val likeCount: Long,
-        val replyCount: Int,
-        val replyPreviews: List<ReplyPreview> = emptyList(),
-        val contextTag: String? = null,
-        val canOpenThread: Boolean = false,
-        val isThreadRoot: Boolean = false,
-        val isUp: Boolean = false,
-    )
-
-    private val items = ArrayList<Item>()
+    private val onClick: (VideoCommentItem) -> Unit,
+    private val onLongClick: (VideoCommentItem) -> Boolean = { false },
+) : RecyclerView.Adapter<VideoCommentsAdapter.Vh>() {
+    private val items = ArrayList<VideoCommentItem>()
     private val requestedNotePictures = HashSet<Long>()
 
     init {
@@ -63,14 +35,14 @@ class PlayerCommentsAdapter(
         notifyItemRangeChanged(0, itemCount)
     }
 
-    fun setItems(list: List<Item>) {
+    fun setItems(list: List<VideoCommentItem>) {
         items.clear()
         items.addAll(list)
         requestedNotePictures.clear()
         notifyDataSetChanged()
     }
 
-    fun appendItems(list: List<Item>) {
+    fun appendItems(list: List<VideoCommentItem>) {
         if (list.isEmpty()) return
         val start = items.size
         items.addAll(list)
@@ -120,7 +92,7 @@ class PlayerCommentsAdapter(
         )
     }
 
-    private fun maybeRequestNotePictures(item: Item) {
+    private fun maybeRequestNotePictures(item: VideoCommentItem) {
         if (item.pictures.isNotEmpty()) return
         if (item.noteCvid <= 0L) return
         if (!requestedNotePictures.add(item.rpid)) return
@@ -133,11 +105,11 @@ class PlayerCommentsAdapter(
         private var boundRpid: Long = 0L
 
         fun bind(
-            item: Item,
+            item: VideoCommentItem,
             isExpanded: Boolean,
             onExpand: (Long) -> Unit,
-            onClick: (Item) -> Unit,
-            onLongClick: (Item) -> Boolean,
+            onClick: (VideoCommentItem) -> Unit,
+            onLongClick: (VideoCommentItem) -> Boolean,
         ) {
             boundRpid = item.rpid
             val ctx = binding.root.context
@@ -275,7 +247,7 @@ class PlayerCommentsAdapter(
             }
         }
 
-        private fun bindReplyPreviewText(view: android.widget.TextView, preview: ReplyPreview, userColor: Int) {
+        private fun bindReplyPreviewText(view: android.widget.TextView, preview: VideoCommentReplyPreview, userColor: Int) {
             val u = preview.userName.ifBlank { "-" }
             val m = preview.message.ifBlank { "-" }
             val s = "$u：$m"

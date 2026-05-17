@@ -71,7 +71,6 @@ import blbl.cat3399.core.prefs.AppPrefs
 import blbl.cat3399.core.ui.ActivityStackLimiter
 import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.BaseActivity
-import blbl.cat3399.core.ui.DpadGridController
 import blbl.cat3399.core.ui.DoubleBackToExitHandler
 import blbl.cat3399.core.ui.FocusReturn
 import blbl.cat3399.core.ui.FocusTreeUtils
@@ -91,6 +90,8 @@ import blbl.cat3399.feature.player.engine.PlayerEngineKind
 import blbl.cat3399.feature.player.engine.PlaybackSource
 import blbl.cat3399.feature.settings.SettingsActivity
 import blbl.cat3399.feature.video.VideoDetailActivity
+import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
+import blbl.cat3399.feature.video.comment.VideoCommentsPanelController
 import blbl.cat3399.databinding.ActivityPlayerBinding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -130,7 +131,8 @@ class PlayerActivity : BaseActivity() {
     internal var pendingIntentResumeCid: Long? = null
     internal var pendingIntentResumeEpId: Long? = null
     internal val sidePanelFocusReturn = FocusReturn()
-    internal val commentImageViewerFocusReturn = FocusReturn()
+    internal var videoCommentsController: VideoCommentsPanelController? = null
+    internal var videoCommentImageViewerController: VideoCommentImageViewerController? = null
     internal var debugJob: kotlinx.coroutines.Job? = null
     internal val debug = PlayerDebugMetrics()
     internal var progressJob: kotlinx.coroutines.Job? = null
@@ -188,29 +190,6 @@ class PlayerActivity : BaseActivity() {
     internal var socialStateFetchToken: Int = 0
     internal var likeButtonHoldController: HoldToTriggerController? = null
     internal var touchController: PlayerTouchController? = null
-
-    internal var commentSort: Int = COMMENT_SORT_HOT
-    internal var commentsFetchJob: kotlinx.coroutines.Job? = null
-    internal var commentsFetchToken: Int = 0
-    internal var commentsPage: Int = 1
-    internal var commentsTotalCount: Int = -1
-    internal var commentsEndReached: Boolean = false
-    internal val commentsItems: ArrayList<PlayerCommentsAdapter.Item> = ArrayList()
-    internal val expandedCommentRpids: HashSet<Long> = HashSet()
-    internal var commentImageViewerUrls: List<String> = emptyList()
-    internal var commentImageViewerIndex: Int = 0
-
-    internal var commentThreadRootRpid: Long = 0L
-    internal var commentThreadReturnFocusRpid: Long = 0L
-    internal var commentThreadFetchJob: kotlinx.coroutines.Job? = null
-    internal var commentThreadFetchToken: Int = 0
-    internal var commentThreadPage: Int = 1
-    internal var commentThreadTotalCount: Int = -1
-    internal var commentThreadEndReached: Boolean = false
-    internal val commentThreadItems: ArrayList<PlayerCommentsAdapter.Item> = ArrayList()
-
-    internal var commentsDpadController: DpadGridController? = null
-    internal var commentThreadDpadController: DpadGridController? = null
 
     private val doubleBackToExit by lazy {
         DoubleBackToExitHandler(context = this, windowMs = BACK_DOUBLE_PRESS_WINDOW_MS) {
@@ -1128,7 +1107,6 @@ class PlayerActivity : BaseActivity() {
         updateDebugOverlay()
         initPlayerInfoPanel()
         initSidePanels()
-        initCommentImageViewer()
         initBottomCardPanel()
         initSponsorSubmitPanel()
 
@@ -1918,8 +1896,9 @@ class PlayerActivity : BaseActivity() {
         currentVideoShot = null
         currentVideoDetail = null
         relatedVideosFetchJob?.cancel()
-        commentsFetchJob?.cancel()
-        commentThreadFetchJob?.cancel()
+        videoCommentsController?.release()
+        videoCommentsController = null
+        videoCommentImageViewerController = null
         releaseUpQuickCardJobs()
         pageListLoadMoreJob?.cancel()
         partsListLoadMoreJob?.cancel()

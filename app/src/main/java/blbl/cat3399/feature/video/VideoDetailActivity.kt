@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ProgressBar
@@ -31,7 +32,12 @@ import blbl.cat3399.core.ui.smoothScrollToPositionStart
 import blbl.cat3399.core.util.parseBangumiRedirectUrl
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.core.ui.popup.PopupHandle
+import blbl.cat3399.core.ui.popup.PopupModalSizing
 import blbl.cat3399.databinding.ActivityVideoDetailBinding
+import blbl.cat3399.databinding.IncludeVideoCommentImageViewerContentBinding
+import blbl.cat3399.databinding.IncludeVideoCommentsPanelContentBinding
+import blbl.cat3399.databinding.ViewVideoCommentsPopupBinding
 import blbl.cat3399.feature.following.UpDetailActivity
 import blbl.cat3399.feature.my.BangumiDetailActivity
 import blbl.cat3399.feature.player.ArchiveTripleActionState
@@ -47,6 +53,10 @@ import blbl.cat3399.feature.player.parseVideoCardsToPlaylistParsed
 import blbl.cat3399.feature.player.parseUgcSeasonPlaylistFromDetailWithUiCards
 import blbl.cat3399.feature.player.userMessage
 import blbl.cat3399.feature.tag.TagDetailActivity
+import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
+import blbl.cat3399.feature.video.comment.VideoCommentImageViewerViews
+import blbl.cat3399.feature.video.comment.VideoCommentsPanelController
+import blbl.cat3399.feature.video.comment.VideoCommentsPanelViews
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -104,6 +114,9 @@ class VideoDetailActivity : BaseActivity() {
     private var tripleActionJob: Job? = null
     private var socialStateFetchJob: Job? = null
     private var socialStateFetchToken: Int = 0
+    private var commentsPopupHandle: PopupHandle? = null
+    private var commentsPopupController: VideoCommentsPanelController? = null
+    private var commentsPopupImageViewerController: VideoCommentImageViewerController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -177,6 +190,11 @@ class VideoDetailActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
+        commentsPopupHandle?.dismiss()
+        commentsPopupController?.release()
+        commentsPopupHandle = null
+        commentsPopupController = null
+        commentsPopupImageViewerController = null
         ActivityStackLimiter.unregister(group = ACTIVITY_STACK_GROUP, activity = this)
         super.onDestroy()
     }
@@ -219,6 +237,7 @@ class VideoDetailActivity : BaseActivity() {
                 onLikeLongPress = { onLikeButtonLongPressed() },
                 onCoinClick = { onCoinButtonClicked() },
                 onFavClick = { onFavButtonClicked() },
+                onCommentsClick = { openCommentsPopup() },
                 onSecondaryClick = { /* video detail has no secondary action yet */ },
                 onUpCardFocused = { smoothScrollHeaderToTop() },
                 onPartsOrderClick = {
@@ -312,6 +331,7 @@ class VideoDetailActivity : BaseActivity() {
             actionLiked = actionLiked,
             actionCoinCount = actionCoinCount,
             actionFavored = actionFavored,
+            showCommentsAction = aid?.takeIf { it > 0L } != null,
             partsHeaderText = buildPartsHeaderText(cardsCount = currentPartsUiCards.size),
             partsCards = partsCardsForDisplay(),
             partsSelectedKey = resolvePartsSelectedKey(),
@@ -710,6 +730,7 @@ class VideoDetailActivity : BaseActivity() {
             actionLiked = actionLiked,
             actionCoinCount = actionCoinCount,
             actionFavored = actionFavored,
+            showCommentsAction = aid?.takeIf { it > 0L } != null,
             partsHeaderText = buildPartsHeaderText(cardsCount = currentPartsUiCards.size),
             partsCards = partsCardsForDisplay(),
             partsSelectedKey = resolvePartsSelectedKey(),
@@ -794,6 +815,117 @@ class VideoDetailActivity : BaseActivity() {
                 .putExtra(RegionDetailActivity.EXTRA_RID, safeRid)
                 .putExtra(RegionDetailActivity.EXTRA_TITLE, safeTab),
         )
+    }
+
+    private fun openCommentsPopup() {
+        if (commentsPopupHandle?.isShowing == true) {
+            commentsPopupController?.focusRoot()
+            return
+        }
+
+        val requestAid = aid?.takeIf { it > 0L }
+        if (requestAid == null) {
+            AppToast.show(this, getString(R.string.player_comment_no_aid))
+            return
+        }
+
+        var popupBinding: ViewVideoCommentsPopupBinding?
+        var imageViewer: VideoCommentImageViewerController? = null
+        var controller: VideoCommentsPanelController? = null
+        var handle: PopupHandle? = null
+
+        handle =
+            AppPopup.custom(
+                context = this,
+                title = getString(R.string.player_btn_comments),
+                cancelable = true,
+                actions = emptyList(),
+                preferredActionRole = null,
+                autoFocus = false,
+                modalSizing =
+                    PopupModalSizing(
+                        widthRatio = 0.86f,
+                        maxWidthDp = 1120f,
+                        maxHeightRatio = 0.90f,
+                    ),
+                onModalAttached = {
+                    controller?.showRoot()
+                    controller?.ensureLoaded()
+                    controller?.focusRoot()
+                },
+                onDismiss = {
+                    controller?.release()
+                    if (commentsPopupController === controller) commentsPopupController = null
+                    if (commentsPopupImageViewerController === imageViewer) commentsPopupImageViewerController = null
+                    if (commentsPopupHandle === handle) commentsPopupHandle = null
+                    popupBinding = null
+                },
+                onBackPressed = {
+                    controller?.handleBack() == true
+                },
+                content = { dialogContext ->
+                    val b = ViewVideoCommentsPopupBinding.inflate(LayoutInflater.from(dialogContext))
+                    val commentViews = IncludeVideoCommentsPanelContentBinding.bind(b.commentsPopupContent)
+                    val imageViews = IncludeVideoCommentImageViewerContentBinding.bind(b.commentImageViewer)
+                    popupBinding = b
+
+                    imageViewer =
+                        VideoCommentImageViewerController(
+                            views =
+                                VideoCommentImageViewerViews(
+                                    container = b.commentImageViewer,
+                                    image = imageViews.ivCommentImage,
+                                    previous = imageViews.ivCommentImagePrev,
+                                    next = imageViews.ivCommentImageNext,
+                            ),
+                            currentFocusProvider = { window?.decorView?.findFocus() },
+                            fallbackFocusProvider = {
+                                val currentBinding = popupBinding
+                                if (currentBinding == null) {
+                                    null
+                                } else if (commentViews.recyclerCommentThread.visibility == View.VISIBLE) {
+                                    commentViews.recyclerCommentThread
+                                } else {
+                                    commentViews.recyclerComments
+                                }
+                            },
+                        )
+                    b.commentImageViewer.setOnKeyListener { _, _, event ->
+                        imageViewer?.dispatchKeyEvent(event) == true
+                    }
+
+                    controller =
+                        VideoCommentsPanelController(
+                            context = this@VideoDetailActivity,
+                            scope = lifecycleScope,
+                            views =
+                                VideoCommentsPanelViews(
+                                    sortRow = commentViews.rowCommentSort,
+                                    sortHot = commentViews.chipCommentSortHot,
+                                    sortNew = commentViews.chipCommentSortNew,
+                                    comments = commentViews.recyclerComments,
+                                    thread = commentViews.recyclerCommentThread,
+                                    hint = commentViews.tvCommentsHint,
+                                ),
+                            oidProvider = { requestAid },
+                            upMidProvider = { ownerMid ?: 0L },
+                            imageViewer = imageViewer,
+                            isActive = { handle?.isShowing == true && !isFinishing && !isDestroyed },
+                        )
+
+                    b.root
+                },
+            )
+
+        commentsPopupHandle = handle
+        commentsPopupController = controller
+        commentsPopupImageViewerController = imageViewer
+
+        if (handle == null) {
+            controller?.release()
+            commentsPopupController = null
+            commentsPopupImageViewerController = null
+        }
     }
 
     private fun refreshActionButtonStatesFromServer(

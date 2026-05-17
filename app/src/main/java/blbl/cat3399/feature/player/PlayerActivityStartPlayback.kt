@@ -262,23 +262,7 @@ internal fun PlayerActivity.resetPlaybackStateForNewMedia(
     relatedVideosCache = null
     resetPlayerInfoPanelState()
 
-    commentsFetchJob?.cancel()
-    commentsFetchJob = null
-    commentsFetchToken++
-    commentsPage = 1
-    commentsTotalCount = -1
-    commentsEndReached = false
-    commentsItems.clear()
-
-    commentThreadFetchJob?.cancel()
-    commentThreadFetchJob = null
-    commentThreadFetchToken++
-    commentThreadRootRpid = 0L
-    commentThreadReturnFocusRpid = 0L
-    commentThreadPage = 1
-    commentThreadTotalCount = -1
-    commentThreadEndReached = false
-    commentThreadItems.clear()
+    videoCommentsController?.resetForMedia()
 
     currentVideoShot = null
     videoShotFetchJob?.cancel()
@@ -297,12 +281,11 @@ internal fun PlayerActivity.resetPlaybackStateForNewMedia(
     hideBottomCardPanel(restoreFocus = false, dismissTarget = null)
     hideSponsorSubmitPanel(restorePlayback = false)
     menuRevealedPanelSessionActive = false
-    binding.recyclerComments.visibility = View.VISIBLE
-    binding.recyclerCommentThread.visibility = View.GONE
-    binding.rowCommentSort.visibility = View.VISIBLE
-    binding.tvCommentsHint.visibility = View.GONE
-    (binding.recyclerComments.adapter as? PlayerCommentsAdapter)?.setItems(emptyList())
-    (binding.recyclerCommentThread.adapter as? PlayerCommentsAdapter)?.setItems(emptyList())
+    val commentViews = binding.videoCommentsPanelContent()
+    commentViews.recyclerComments.visibility = View.VISIBLE
+    commentViews.recyclerCommentThread.visibility = View.GONE
+    commentViews.rowCommentSort.visibility = View.VISIBLE
+    commentViews.tvCommentsHint.visibility = View.GONE
 
     playbackConstraints = PlaybackConstraints()
     decodeFallbackAttemptCount = 0

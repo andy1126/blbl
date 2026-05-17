@@ -1,4 +1,4 @@
-package blbl.cat3399.feature.player
+package blbl.cat3399.feature.video.comment
 
 import android.graphics.Bitmap
 import android.content.Context
@@ -14,7 +14,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-internal class PlayerCommentImageView
+internal class VideoCommentImageView
     @JvmOverloads
     constructor(
         context: Context,
